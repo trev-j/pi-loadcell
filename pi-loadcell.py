@@ -3,6 +3,7 @@
 
 import RPi.GPIO as GPIO
 import time
+import threading
 
 GPIO.setmode(GPIO.BCM)  # set up BCM GPIO numbering 
 
@@ -33,16 +34,26 @@ class HX711LoadCell:
     # Units suffix for readWeightString function formatting
     self.unitsString = ""
     
+    # Create lock for preventing simultaneous attempts to read HX711
+    self.threadLock = threading.lock()
+    
     # Initialize GPIO
-    GPIO.setup(self.pd_sck, GPIO.IN)
-    GPIO.setup(self.dout, GPIO.OUT)
+    GPIO.setup(self.pd_sck, GPIO.OUT)
+    GPIO.setup(self.dout, GPIO.IN)
 
   
   
   # Set AD amplifier gain. 32, 64, or 128 (default)
   def setGain(self, gain):
     
-    self.gain = gain
+    validGainValues = [32, 64, 128]
+    
+    if int(gain) in validGainValues:
+      
+      self.gain = gain
+    else:
+      
+      raise Exception("Gain value invalid.")
   
   
   
@@ -53,19 +64,19 @@ class HX711LoadCell:
   
   
   
-  # Set channel select
-  def setChannelSelect(self, channel):
+  # Set unit conversion
+  def setUnitConversion(self, unitConversion):
     
-    self.channelSelect = channel
+    self.unitConversion = unitConversion
     
     
     
-  # Get current channel select
-  def setChannelSelect(self):
+  # Get current unit conversion factor
+  def getUnitConversion(self):
     
-    return self.channelSelect
-    
-   
+    return self.unitConversion
+  
+  
   
   # Pulse HX711 clock. Each PD_SCK pulse shifts out one bit, starting with the MSB bit first
   def pulseClock(self):
@@ -82,7 +93,7 @@ class HX711LoadCell:
   
   
   
-  # Check dout pin for falling edge
+  # Check DOUT pin for falling edge
   def isCommBusy(self):
     
     return GPIO.input(self.dout) == 0
@@ -142,8 +153,15 @@ class HX711LoadCell:
     # Returns int value
     def readRawBytes(self):
       
+      # Start thread lock
+      self.threadLock.acquire()
+      
       # variable for storing read byte data from DOUT
       dataBytes = []
+      
+      # Wait for HX711 comms to be available
+      while self.isCommBusy():
+         pass
       
       # Read 3 bytes from DOUT and store in array
       for i in range (3):
@@ -167,7 +185,10 @@ class HX711LoadCell:
       
       # Clear bits equal to pulse offset determined by gain
       self.clearDOUT(pulseOffset)
-        
+      
+      # Release thread lock
+      self.threadLock.release()
+      
       # If MSB byte format, reverse order of bytes in array
       if self.byteMSB:
           
@@ -239,21 +260,36 @@ class HX711LoadCell:
     # enters power down mode
     def powerDown(self):
       
+      # Start thread lock
+      self.threadLock.acquire()
+      
       # Toggle PK_SCK pin to high
       GPIO.output(self.pk_sck, False)
       GPIO.output(self.pk_sck, True)
       
+      # Delay for at least 60µs for power down
+      time.sleep(0.0001)
+      
+      # Release thread lock
+      self.threadLock.release()
       
      
+    
     # Powers on HX711 chip set. On power up, gain is automatically reset to 128. 
     # Reset gain and channel select to stored values on startup.
     def powerUp(self):
+      
+      # Start thread lock
+      self.threadLock.acquire()
       
       # Write PK_SCK pin low
       GPIO.output(self.pk_sck, False)
       
       # Clear DOUT
       self.clearDOUT()
+      
+      # Release thread lock
+      self.threadLock.release()
       
       
       
