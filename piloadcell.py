@@ -1,4 +1,4 @@
-# pi-loadcell.py
+# piloadcell.py
 # HX711 datasheet: https://www.digikey.com/htmldatasheets/production/1836471/0/0/1/hx711.html
 
 import RPi.GPIO as GPIO
@@ -53,7 +53,7 @@ class HX711LoadCell:
       self.gain = gain
     else:
       
-      raise Exception("Gain value invalid.")
+      raise ValueError("Gain value invalid.")
   
   
   
@@ -67,7 +67,13 @@ class HX711LoadCell:
   # Set unit conversion
   def setUnitConversion(self, unitConversion):
     
-    self.unitConversion = unitConversion
+    if (unitConversion > 0):
+
+      self.unitConversion = unitConversion
+    else:
+
+      raise ValueError("Unit conversion value must be greater than zero")
+    
     
     
     
